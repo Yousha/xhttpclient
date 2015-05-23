@@ -14,4 +14,5 @@ interface DriverInterface
    public function delete($url, $headers = array());
    public function setTimeout($seconds);
    public function setHeaders($headers);
+   public function sendRequest($method, $url, $data = null, $headers = array());
 }

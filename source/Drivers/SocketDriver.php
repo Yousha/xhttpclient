@@ -13,25 +13,26 @@ final class SocketDriver implements DriverInterface
 {
    private $headers = array();
    private $timeout = 30;
+   private $userAgent = 'PHP-HttpClient/1.0';
 
    public function get($url, $headers = array())
    {
-      return $this->sendRequest('GET', $url, null, $headers);
+      return $this->_send('GET', $url, null, $headers);
    }
 
    public function post($url, $data, $headers = array())
    {
-      return $this->sendRequest('POST', $url, $data, $headers);
+      return $this->_send('POST', $url, $data, $headers);
    }
 
    public function put($url, $data, $headers = array())
    {
-      return $this->sendRequest('PUT', $url, $data, $headers);
+      return $this->_send('PUT', $url, $data, $headers);
    }
 
    public function delete($url, $headers = array())
    {
-      return $this->sendRequest('DELETE', $url, null, $headers);
+      return $this->_send('DELETE', $url, null, $headers);
    }
 
    public function setTimeout($seconds)
@@ -44,38 +45,65 @@ final class SocketDriver implements DriverInterface
       $this->headers = $headers;
    }
 
-   private function sendRequest($method, $url, $data = null, $headers = array())
+   public function sendRequest($method, $url, $data = null, $headers = array())
+   {
+      return $this->_send($method, $url, $data, $headers);
+   }
+
+   private function _send($method, $url, $data = null, $headers = array())
    {
       $parsed = parse_url($url);
+
+      if (!$parsed || !isset($parsed['host'])) {
+         $e = new HttpClientException("Invalid URL", 0);
+         $e->setContext(array(
+            'url' => $url,
+            'request_method' => $method
+         ));
+         throw $e;
+      }
+
       $host = $parsed['host'];
       $port = isset($parsed['port']) ? $parsed['port'] : ($parsed['scheme'] === 'https' ? 443 : 80);
       $path = isset($parsed['path']) ? $parsed['path'] : '/';
       $query = isset($parsed['query']) ? $parsed['query'] : '';
 
-      if ($method === 'GET' && !empty($data)) {
+      if ($method === 'GET' && $data !== null) {
          $query .= (empty($query) ? '' : '&') . http_build_query($data);
       }
 
-      $path .= (empty($query) ? '' : "?{$query}");
+      $path .= (empty($query) ? '' : "?$query");
 
       $scheme = ($parsed['scheme'] === 'https') ? 'ssl://' : '';
-      $fp = fsockopen($scheme . $host, $port, $errno, $errstr, $this->timeout);
+      $fp = @fsockopen($scheme . $host, $port, $errno, $errstr, $this->timeout);
 
       if (!$fp) {
-         throw new HttpClientException("Socket error: {$errstr}", $errno);
+         $e = new HttpClientException("Socket connection failed: $errstr", $errno);
+         $e->setContext(array(
+            'url' => $url,
+            'host' => $host,
+            'port' => $port,
+            'request_method' => $method
+         ));
+         throw $e;
       }
 
       $headers = array_merge($this->headers, $headers);
+
+      if (!isset($headers['User-Agent'])) {
+         $headers['User-Agent'] = $this->userAgent;
+      }
+
       $request = "$method $path HTTP/1.1\r\n";
       $request .= "Host: $host\r\n";
-      $request .= "Connection: Close\r\n";
+      $request .= "Connection: close\r\n";
 
       foreach ($headers as $key => $value) {
          $request .= "$key: $value\r\n";
       }
 
       if ($method === 'POST') {
-         $postData = http_build_query($data);
+         $postData = is_array($data) ? http_build_query($data) : $data;
          $request .= "Content-Type: application/x-www-form-urlencoded\r\n";
          $request .= "Content-Length: " . strlen($postData) . "\r\n\r\n";
          $request .= $postData;
@@ -91,11 +119,19 @@ final class SocketDriver implements DriverInterface
       }
 
       fclose($fp);
-      list($headers, $body) = explode("\r\n\r\n", $response, 2);
-      $statusCode = $this->parseStatusCode($headers);
+
+      list($headerString, $body) = explode("\r\n\r\n", $response, 2);
+
+      $statusCode = $this->parseStatusCode($headerString);
+      $headers = $this->parseHeaders($headerString);
+
+      if (isset($headers['Transfer-Encoding']) && strtolower($headers['Transfer-Encoding']) === 'chunked') {
+         $body = $this->decodeChunkedBody($body);
+      }
+
       return array(
          'status' => $statusCode,
-         'headers' => $this->parseHeaders($headers),
+         'headers' => $headers,
          'body' => $body
       );
    }
@@ -109,14 +145,40 @@ final class SocketDriver implements DriverInterface
    private function parseHeaders($headerString)
    {
       $headers = array();
-
       foreach (explode("\r\n", $headerString) as $line) {
          if (strpos($line, ':') !== false) {
             list($key, $value) = explode(':', $line, 2);
             $headers[trim($key)] = trim($value);
          }
       }
-
       return $headers;
+   }
+
+   private function decodeChunkedBody($body)
+   {
+      $decoded = '';
+      $pos = 0;
+
+      while ($pos < strlen($body)) {
+         $hex = '';
+         while (true) {
+            $c = substr($body, $pos++, 1);
+            if ($c === '' || $c === "\r") continue;
+            if ($c === "\n") break;
+            $hex .= $c;
+         }
+
+         $length = hexdec($hex);
+         if ($length === 0) break;
+
+         $decoded .= substr($body, $pos, $length);
+         $pos += $length;
+
+         while ($pos < strlen($body) && (substr($body, $pos, 1) === "\r" || substr($body, $pos, 1) === "\n")) {
+            $pos++;
+         }
+      }
+
+      return $decoded;
    }
 }

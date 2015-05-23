@@ -1,17 +1,41 @@
 <?php
 
+if (!defined('HttpClientException_PHP')) {
+   define('HttpClientException_PHP', true);
+} else {
+   return;
+}
+
 /**
  * Custom exception for HTTP Client errors.
  */
 final class HttpClientException extends Exception
 {
-   public function __construct($message, $code = 0, Exception $previous = null)
+   private $context = array();
+
+   public function __construct($message, $code = 0)
    {
-      parent::__construct($message, $code, $previous);
+      parent::__construct($message, $code);
+   }
+
+   public function setContext($context)
+   {
+      $this->context = $context;
+   }
+
+   public function getContext()
+   {
+      return $this->context;
    }
 
    public function __toString()
    {
-      return __CLASS__ . ": [{$this->code}]: {$this->message}\n";
+      $str = __CLASS__ . ": [{$this->code}]: {$this->message}\n";
+      if (!empty($this->context)) {
+         foreach ($this->context as $key => $value) {
+            $str .= " [$key] $value\n";
+         }
+      }
+      return $str;
    }
 }
