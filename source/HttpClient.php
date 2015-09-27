@@ -6,26 +6,27 @@ if (!defined('HTTPCLIENT_PHP')) {
    return;
 }
 
+require_once 'Exceptions/HttpClientException.php';
+require_once 'CookieJar.php';
 require_once 'Drivers/DriverInterface.php';
 require_once 'Drivers/CurlDriver.php';
 require_once 'Drivers/SocketDriver.php';
-require_once 'Exceptions/HttpClientException.php';
 
-/**
- * Main HTTP client class.
- */
 final class HttpClient
 {
    private $driver;
    private $defaultHeaders = array();
    private $timeout = 30;
+   private $cookieJar;
 
    public function __construct($driverType = 'curl', $options = array())
    {
+      $this->cookieJar = new CookieJar();
+
       if ($driverType === 'curl') {
-         $this->driver = new CurlDriver();
+         $this->driver = new CurlDriver($this->cookieJar); // Pass cookie jar
       } elseif ($driverType === 'socket') {
-         $this->driver = new SocketDriver();
+         $this->driver = new SocketDriver($this->cookieJar);
       } else {
          $e = new HttpClientException('Invalid driver type.', 0);
          $e->setContext(array('given_type' => $driverType));
@@ -71,6 +72,11 @@ final class HttpClient
    {
       $this->defaultHeaders = $headers;
       $this->driver->setHeaders($headers);
+   }
+
+   public function clearCookies()
+   {
+      $this->cookieJar->clear();
    }
 
    private function sendRequest($method, $url, $data = null, $headers = array())

@@ -1,7 +1,7 @@
 <?php
 
-if (!defined('HttpClientException_PHP')) {
-   define('HttpClientException_PHP', true);
+if (!defined('HTTPCLIENTEXCEPTION_PHP')) {
+   define('HTTPCLIENTEXCEPTION_PHP', true);
 } else {
    return;
 }

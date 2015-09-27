@@ -1,6 +1,7 @@
 <?php
 
 require_once 'source/HttpClient.php';
+require_once 'source/HttpCode.php';
 
 $options = array(
    'timeout' => 10,
@@ -11,22 +12,26 @@ $options = array(
 );
 
 try {
-   // GET using CURL driver
+   // GET using CURL driver.
    $client = new HttpClient('curl', $options);
-   $response = $client->get('https://yahoo.com ');
+   $response = $client->get('https://yahoo.com');
    echo "GET Response (Status: {$response['status']}):\n";
    print_r($response);
    echo "\n";
 
-   // POST using Socket driver
+   $response = $client->get('https://yahoo.com');
+   $statusText = HttpCode::getMessage($response['status']);
+   echo "GET Response (Status: {$response['status']} - $statusText):\n";
+
+   // POST using Socket driver.
    $client = new HttpClient('socket', $options);
-   $response = $client->post('https://yahoo.com ', array('name' => 'Test'));
+   $response = $client->post('https://yahoo.com', array('name' => 'Test'));
    echo "POST Response (Status: {$response['status']}):\n";
    print_r($response);
    echo "\n";
 
-   // PUT Request
-   $response = $client->put('https://api.yahoo.com/resource/1 ', array(
+   // PUT Request.
+   $response = $client->put('https://api.yahoo.com/resource/1', array(
       'name' => 'Updated Name'
    ), array(
       'Content-Type' => 'application/json'
@@ -35,8 +40,8 @@ try {
    print_r($response);
    echo "\n";
 
-   // DELETE Request
-   $response = $client->delete('https://api.yahoo.com/resource/1 ', array(
+   // DELETE Request.
+   $response = $client->delete('https://api.yahoo.com/resource/1', array(
       'Authorization' => 'Bearer token123'
    ));
    echo "DELETE Response (Status: {$response['status']}):\n";

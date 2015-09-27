@@ -14,6 +14,12 @@ final class SocketDriver implements DriverInterface
    private $headers = array();
    private $timeout = 30;
    private $userAgent = 'PHP-HttpClient/1.0';
+   private $cookieJar;
+
+   public function __construct(CookieJar $cookieJar)
+   {
+      $this->cookieJar = $cookieJar;
+   }
 
    public function get($url, $headers = array())
    {
@@ -90,6 +96,12 @@ final class SocketDriver implements DriverInterface
 
       $headers = array_merge($this->headers, $headers);
 
+      // Add cookies if any
+      $cookies = $this->cookieJar->getCookiesForUrl($url);
+      if (!empty($cookies)) {
+         $headers['Cookie'] = http_build_query($cookies, '', '; ');
+      }
+
       if (!isset($headers['User-Agent'])) {
          $headers['User-Agent'] = $this->userAgent;
       }
@@ -121,6 +133,9 @@ final class SocketDriver implements DriverInterface
       fclose($fp);
 
       list($headerString, $body) = explode("\r\n\r\n", $response, 2);
+
+      // Store cookies from response headers
+      $this->cookieJar->addFromHeaders($host, $path, explode("\r\n", $headerString));
 
       $statusCode = $this->parseStatusCode($headerString);
       $headers = $this->parseHeaders($headerString);

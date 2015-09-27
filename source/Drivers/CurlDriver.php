@@ -13,7 +13,13 @@ final class CurlDriver implements DriverInterface
 {
    private $headers = array();
    private $timeout = 30;
-   private $userAgent = 'XHttpClient/1.2.0';
+   private $userAgent = 'PHP-HttpClient/1.0';
+   private $cookieJar;
+
+   public function __construct(CookieJar $cookieJar)
+   {
+      $this->cookieJar = $cookieJar;
+   }
 
    public function get($url, $headers = array())
    {
@@ -55,6 +61,12 @@ final class CurlDriver implements DriverInterface
       $ch = curl_init();
       $headers = array_merge($this->headers, $headers);
 
+      // Add cookies if any
+      $cookies = $this->cookieJar->getCookiesForUrl($url);
+      if (!empty($cookies)) {
+         $headers['Cookie'] = http_build_query($cookies, '', '; ');
+      }
+
       if (!isset($headers['User-Agent'])) {
          $headers['User-Agent'] = $this->userAgent;
       }
@@ -84,7 +96,7 @@ final class CurlDriver implements DriverInterface
          $errno = curl_errno($ch);
          curl_close($ch);
 
-         $e = new HttpClientException("cURL request failed: {$error}", $errno);
+         $e = new HttpClientException("cURL request failed: $error", $errno);
          $e->setContext(array(
             'url' => $url,
             'error' => $error,
@@ -96,11 +108,18 @@ final class CurlDriver implements DriverInterface
 
       $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
       $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+      $headerString = substr($response, 0, $headerSize);
       curl_close($ch);
+
+      // Store cookies from response headers
+      $parsed = parse_url($url);
+      $host = $parsed['host'];
+      $path = isset($parsed['path']) ? $parsed['path'] : '/';
+      $this->cookieJar->addFromHeaders($host, $path, explode("\r\n", $headerString));
 
       return array(
          'status' => $statusCode,
-         'headers' => $this->parseHeaders(substr($response, 0, $headerSize)),
+         'headers' => $this->parseHeaders($headerString),
          'body' => substr($response, $headerSize)
       );
    }
