@@ -1,4 +1,4 @@
-X HTTP Client (PHP 5.0)
+X HTTP Client (PHP 5)
 ==============================
 
 A self-contained HTTP client for PHP 5.0 that supports cURL and Socket drivers.
@@ -7,7 +7,7 @@ Usage
 ===============
 
 - Download all files into your project directory, then:
-
+```
 require_once 'HttpClient.php';
 
 // Create client with CURL driver.
@@ -33,7 +33,7 @@ $response = $client->post('http://example.com/api', array(
     'param1' => 'value1',
     'param2' => 'value2'
 ));
-
+```
 Requirements
 ===============
 
